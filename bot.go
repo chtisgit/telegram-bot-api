@@ -217,20 +217,25 @@ func (bot *BotAPI) UploadFile(endpoint string, params map[string]string, fieldna
 	}
 	defer res.Body.Close()
 
-	bytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return APIResponse{}, err
-	}
-
-	if bot.Debug {
-		log.Println(string(bytes))
-	}
-
 	var apiResp APIResponse
 
-	err = json.Unmarshal(bytes, &apiResp)
-	if err != nil {
-		return APIResponse{}, err
+	if bot.Debug {
+		bytes, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return APIResponse{}, err
+		}
+
+		log.Println(string(bytes))
+
+		err = json.Unmarshal(bytes, &apiResp)
+		if err != nil {
+			return APIResponse{}, err
+		}
+	} else {
+		err := json.NewDecoder(res.Body).Decode(&apiResp)
+		if err != nil {
+			return APIResponse{}, err
+		}
 	}
 
 	if !apiResp.Ok {
@@ -542,11 +547,10 @@ func (bot *BotAPI) ListenForWebhook(pattern string) UpdatesChannel {
 	ch := make(chan Update, bot.Buffer)
 
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-		bytes, _ := ioutil.ReadAll(r.Body)
-		r.Body.Close()
+		defer r.Body.Close()
 
 		var update Update
-		json.Unmarshal(bytes, &update)
+		_ = json.NewDecoder(r.Body).Decode(&update)
 
 		ch <- update
 	})
